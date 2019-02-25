@@ -40,6 +40,14 @@ func rateSquare(depth int) int {
 		direction Direction
 */
 func step(game Req) Direction {
-	
+
+	if game.You.Body[0].Y == 8 {
+		if game.You.Body[0].X == 8 {
+			return Left
+		}
+
+		return Right
+	}
+
 	return Down
 }
