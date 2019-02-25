@@ -2,6 +2,7 @@
     "comment": "Battlesnake 2019 AI written in Go",
     "rootPath": "github.com/Sean-Clarke/go-snake-go",
     "heroku": {
-        "sync": false
+        "install" : [ "./..." ],
+        "goVersion": "go1.10"
     }
 }

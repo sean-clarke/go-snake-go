@@ -13,7 +13,6 @@ func Index(res http.ResponseWriter, req *http.Request) {
 
 func Start(res http.ResponseWriter, req *http.Request) {
 	decoded := Req{}
-
 	err := json.NewDecoder(req.Body).Decode(&decoded)
 	if err != nil {
 		return
