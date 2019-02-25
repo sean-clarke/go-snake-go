@@ -1,0 +1,7 @@
+{
+    "comment": "",
+    "rootPath": "github.com/Sean-Clarke/go-snake-go",
+    "heroku": {
+        "sync": false
+    }
+}
