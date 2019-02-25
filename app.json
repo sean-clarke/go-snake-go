@@ -2,10 +2,12 @@
     "name": "go-snake-go",
     "description": "2019 Battlesnake AI written in Go",
     "keywords": [
-      "battlesnake"
+        "battlesnake"
     ],
     "repository": "https://github.com/Sean-Clarke/go-snake-go",
-    "env": {
-      "BUILDPACK_URL": "https://github.com/kr/heroku-buildpack-go"
-    }
-  }
+    "buildpacks": [
+        {
+            "url": "heroku/go"
+        }
+    ]
+}
