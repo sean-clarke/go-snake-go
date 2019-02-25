@@ -41,5 +41,5 @@ func rateSquare(depth int) int {
 */
 func step(game Req) Direction {
 	
-	return Left
+	return Down
 }

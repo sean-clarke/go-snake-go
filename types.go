@@ -50,5 +50,5 @@ type Init struct {
 }
 
 type Resp struct {
-	Move string `json:"move"`
+	Move Direction `json:"move"`
 }
