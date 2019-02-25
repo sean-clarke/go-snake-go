@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"os"
 )
 
 func main() {
@@ -11,5 +12,10 @@ func main() {
 	http.HandleFunc("/end", End)
 	http.HandleFunc("/ping", Ping)
 
-	http.ListenAndServe(":8080", nil)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	http.ListenAndServe(":"+port, nil)
 }

@@ -1,1 +1,1 @@
-web: go-snake-go.exe
+web: go-snake-go
