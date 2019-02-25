@@ -5,9 +5,4 @@
         "battlesnake"
     ],
     "repository": "https://github.com/Sean-Clarke/go-snake-go",
-    "buildpacks": [
-        {
-            "url": "heroku/go"
-        }
-    ]
 }
