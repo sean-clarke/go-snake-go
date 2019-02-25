@@ -17,7 +17,12 @@ func Start(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	resp := Init{Color: "#75CEDD"}
+	resp := Init{
+		Color: "#006666",
+		Head: "pixel",
+		Tail: "pixel",
+	}
+
 	res.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(res).Encode(resp)
 	res.Write([]byte("\n"))
@@ -30,7 +35,9 @@ func Move(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	resp := Resp{Move: "left"}
+	direction := step()
+
+	resp := Resp{Move: direction}
 	res.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(res).Encode(resp)
 	res.Write([]byte("\n"))

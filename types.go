@@ -5,6 +5,19 @@ type Pos struct {
 	Y int `json:"y"`
 }
 
+type Square struct {
+	Value int
+}
+
+type Direction string
+
+const (
+	Up Direction = "up"
+	Left Direction = "left"
+	Down Direction = "down"
+	Right Direction = "right"
+)
+
 type Snake struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -32,6 +45,8 @@ type Req struct {
 
 type Init struct {
 	Color string `json:"color,omitempty"`
+	Head string `json:"headType,omitempty"` 
+	Tail string `json:"tailType,omitempty"`
 }
 
 type Resp struct {
