@@ -36,7 +36,6 @@ func Move(res http.ResponseWriter, req *http.Request) {
 	}
 
 	direction := step(decoded)
-
 	resp := Resp{Move: direction}
 	res.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(res).Encode(resp)

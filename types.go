@@ -6,7 +6,15 @@ type Pos struct {
 }
 
 type Square struct {
-	Value int
+	X, Y int
+	Tag string
+	Tenure int
+	Food bool
+	Base float32
+}
+
+type Matrix struct {
+	Matrix [][]Square
 }
 
 type Direction string
