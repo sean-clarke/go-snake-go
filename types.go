@@ -1,13 +1,16 @@
 package main
 
-type Pos struct {
-	X int `json:"x"`
+type Coordinate struct {
 	Y int `json:"y"`
+	X int `json:"x"`
+}
+
+type Position struct {
+	Y int
+	X int
 }
 
 type Square struct {
-	X, Y int
-	Tag string
 	Tenure int
 	Food bool
 	Base float32
@@ -15,6 +18,10 @@ type Square struct {
 
 type Matrix struct {
 	Matrix [][]Square
+	Width int
+	Height int
+	Heads []Position
+	Food []Position
 }
 
 type Direction string
@@ -30,13 +37,13 @@ type Snake struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Health int    `json:"health"`
-	Body   []Pos  `json:"body"`
+	Body   []Coordinate  `json:"body"`
 }
 
 type Board struct {
 	Height int     `json:"height"`
 	Width  int     `json:"width"`
-	Food   []Pos   `json:"food"`
+	Food   []Coordinate   `json:"food"`
 	Snakes []Snake `json:"snakes"`
 }
 
