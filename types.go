@@ -35,6 +35,16 @@ const (
 	Right Direction = "right"
 )
 
+type Rating struct {
+	Value float64
+	Distance int
+}
+
+type Packet struct {
+	Dir Direction
+	Rating Rating
+}
+
 type Snake struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`

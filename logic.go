@@ -2,17 +2,13 @@ package main
 
 
 import (
-	"fmt"
+	// "fmt"
 	"math/rand"
-	"sync"
 )
 
 // global variables
 var (
-	globalDepth int = 13 // maximum iterations of rateSquare the snake will attempt 
-	randomModifier float64 = 0.1 // range of 0-2 determining entropy's effect on snake's movement
 	hungerModifier float64 // rating of 0-2 determining hunger's effect on snake's movement
-	fearModifier float64 = 1 // rating of 0-2 determining pessimism's effect on snake's movement
 	directionShift = map[Direction][]int {
 		Up: {-1, 0},
 		Left: {0, -1},
@@ -20,8 +16,6 @@ var (
 		Down: {1, 0},
 	}
 )
-
-
 
 /*	printMatrix
 *		Prints either a value grid or board representation of the matrix
@@ -31,7 +25,7 @@ var (
 *		bool - true prints board representation, false prints square values
 *	returns:
 *		nil
-*/
+*//*
 func (matrix Matrix) printMatrix(repr bool) {
 	if repr {
 		for y := range matrix.Matrix {
@@ -63,16 +57,18 @@ func (matrix Matrix) printMatrix(repr bool) {
 	fmt.Println("")
 	fmt.Println("")
 }
-
+*/
 /*
 *	populateMatrix
 *		Sets the food and tenure values of the matrix's squares
 *	type:
-*		Matrix
+*		matrix Matrix
 *	parameters:
-*		Req
+*		data Req
 *	returns:
 *		nil
+*	description:
+*		lorem ipsum
 */
 func (matrix Matrix) populateMatrix(data Req) {
 	// set food
@@ -108,11 +104,13 @@ func (matrix Matrix) populateMatrix(data Req) {
 *	initMatrix
 *		Creates the matrix's squares and call's populateMatrix
 *	type:
-*		Matrix
+*		matrix Matrix
 *	paramaters:
-*		Req
+*		data Req
 *	returns:
 *		nil
+*	description:
+*		lorem ipsum
 */
 func (matrix Matrix) initMatrix(data Req) {
 	var width, height int = data.Board.Width, data.Board.Height
@@ -128,7 +126,10 @@ func (matrix Matrix) initMatrix(data Req) {
 				v -= 0.25
 			}
 
-			// Add random value to square value
+			// Initialize randomModifier
+			var randomModifier float64 = 0.1
+
+			// Increase square value by random value if randomModifier > 0
 			if randomModifier != 0 {
 				v += rand.Float64() * randomModifier
 			}
@@ -146,67 +147,99 @@ func (matrix Matrix) initMatrix(data Req) {
 }
 
 /*
+*	exp
+*	parameters:
+*		base float64
+*		power float 64
+*	returns:
+*		result float64
+*	description:
+*		lorem ipsum
+*/
+func exp(base float64, power float64) float64 {
+	if power == 0 {
+		return 1
+	}
+	for power > 1 {
+		base *= base
+		power -= 1
+	}
+	return base
+}
+
+/*
 *	rateSquare
 *	paramaters:
 *		origin Direction
 *		depth int
-*
 *	returns:
 *		rating int
-*
 *	description:
 *		lorem ipsum
 */
-func (matrix Matrix) rateSquare(y int, x int, origin Direction, distance int, depth int, length int, grownby int, history []Position) float64 {
-	// return 0 if out of bounds
+func (matrix *Matrix) rateSquare(y int, x int, origin Direction, distance int, depth int, length int, grownby int, health int, history []Position) Rating {
+
+	// out of bounds
 	if x == -1 || x == matrix.Width || y == -1 || y == matrix.Height {
-		return 0
+		return Rating{0, distance}
 	}
-	// return 0 if occupied square
+
+	// currently occupied
 	eatenOffset := 0
 	if matrix.Matrix[y][x].Self {
 		eatenOffset = grownby
 	}
 	if matrix.Matrix[y][x].Tenure + eatenOffset >= distance {
-		return 0
+		return Rating{0, distance}
 	}
+
+	// occupied by current path
 	for p := range history {
 		pos := &history[p]
 		if x == pos.X {
 			if y == pos.Y {
-				return 0
+				return Rating{0, distance}
 			}
 		}
 	}
-	history = append(history, Position{y, x})
-	if len(history) >= length + grownby {
-		history = history[1:]
-	}
 
+	// set base value
+	health -= 1
 	base := matrix.Matrix[y][x].Base
 	if matrix.Matrix[y][x].Food {
 		grownby += 1
-		base += float64(100 / (distance * distance)) * hungerModifier
+		// to promote moderation, 25 <-> 20, 4 <-> 2
+		var hungerModifier float64 = 4 / (exp(2, float64(health) / 25))
+		base += float64(100 / (distance * distance)) * 4 * hungerModifier
+		health = 100
 	}
 
-	// base case
+	// return base value (base case)
 	if depth == 0 {
-		return base
+		return Rating{base, distance}
 	}
 
-	// recursive case
-	var nodes = map[Direction]Direction{
+	// add current position to history
+	history = append(history, Position{y, x})
+
+	// remove last position in history if tenure is up
+	if length < depth && len(history) >= length + grownby {
+		history = history[1:]
+	}
+
+	// continue search (recursive case)
+	var directions = map[Direction]Direction{
 		Up: Down,
 		Left: Right,
 		Right: Left,
 		Down: Up,
 	}
-	delete(nodes, origin)
+	delete(directions, origin)
 
-	var rating float64 = 0
+	var rating Rating
 
-	for direction, opposite := range nodes {
-		value:= matrix.rateSquare(
+	for direction, opposite := range directions {
+		node := matrix.rateSquare(
 			y + directionShift[direction][0],
 			x + directionShift[direction][1],
 			opposite,
@@ -214,9 +247,13 @@ func (matrix Matrix) rateSquare(y int, x int, origin Direction, distance int, de
 			depth - 1,
 			length,
 			grownby,
+			health,
 			history,
 		)
-		rating += base * value / 3
+		rating.Value += base * node.Value / 3
+		if node.Distance > rating.Distance {
+			rating.Distance = node.Distance
+		}
 	}
 
 	return rating
@@ -228,6 +265,8 @@ func (matrix Matrix) rateSquare(y int, x int, origin Direction, distance int, de
 *		Req
 *	returns:
 *		Direction
+*	description:
+*		lorem ipsum
 */
 func step(data Req) Direction {
 	var matrix = Matrix{
@@ -271,61 +310,58 @@ func step(data Req) Direction {
 	var next Direction
 	var confidence float64 = 0
 
-	if data.You.Health > 80 {
-		hungerModifier = 0
-	} else if data.You.Health > 60 {
-		hungerModifier = 0.25
-	} else if data.You.Health > 40 {
-		hungerModifier = 0.5
-	} else if data.You.Health > 20 {
-		hungerModifier = 1
-	} else {
-		hungerModifier = 2
-	}
-
 	length := len(data.You.Body)
 
 	// limit depth by snake length
-	localDepth := globalDepth
-	if localDepth > length + 5 {
-		localDepth = length + 5
-	} else if length > 100 {
-		localDepth = 16
-	} else if length > 80 {
-		localDepth = 15
-	} else if length > 60 {
-		localDepth = 14
+	var localDepth int = 12 // maximum iterations of rateSquare the snake will attempt 
+	if length < 50 {
+		if localDepth > length + 2 {
+			localDepth = length + 2
+		}
+	} else {
+		localDepth += (length - 30) / 18
 	}
 
 	// fmt.Printf("%s: ", "depth")
 	// fmt.Printf("%d", localDepth)
 	// fmt.Println()
 
-	var wg sync.WaitGroup
+	ch := make(chan Packet)
+	defer close(ch)
 	for direction, opposite := range directions {
-		wg.Add(1)
-		go func(y int, x int, direction Direction, opposite Direction, depth int, length int) {
-			var c = matrix.rateSquare(
-				y + directionShift[direction][0],
-				x + directionShift[direction][1],
+		go func(direction Direction, opposite Direction) {
+			var rating = matrix.rateSquare(
+				y0 + directionShift[direction][0],
+				x0 + directionShift[direction][1],
 				opposite,
 				1,
-				depth,
+				localDepth,
 				length,
 				0,
+				data.You.Health,
 				[]Position{},
 			)
-			defer wg.Done()
-			// fmt.Printf("%s: ", direction)
-			// fmt.Printf("%8f", c)
-			// fmt.Println()
-			if c > confidence {
-				next = direction
-				confidence = c
-			}
-		}(y0, x0, direction, opposite, localDepth, length)
+			ch <- Packet{direction, rating}
+		}(direction, opposite)	
 	}
-	wg.Wait()
+
+	reach := 0
+
+	for i := 0; i < len(directions); i++ {
+		packet := <-ch
+		// fmt.Printf("%s: ", packet.Dir)
+		// fmt.Printf("%8f", packet.Rating.Value)
+		// fmt.Println()
+		// choose highest rated path
+		if packet.Rating.Value > confidence {
+			next = packet.Dir
+			confidence = packet.Rating.Value
+		// fallback on longest path if death is inevitable
+		} else if confidence == 0 && packet.Rating.Distance > reach {
+			reach = packet.Rating.Distance
+			next = packet.Dir
+		}
+	}
 
 	return next
 }
