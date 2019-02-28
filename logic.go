@@ -6,11 +6,12 @@ import (
 	"math/rand"
 )
 
-
+// global variables
 var (
-	randomModifier float32 = 0.1 // range of 0-2 determining entropy's effect on snake's movement
-	hungerModifier float32 = 50 // rating of 0-2 determining hunger's effect on snake's movement
-	fearModifier float32 = 1 // rating of 0-2 determining pessimism's effect on snake's movement
+	maxDepth int = 12 // maximum iterations of rateSquare the snake will attempt 
+	randomModifier float64 = 0.1 // range of 0-2 determining entropy's effect on snake's movement
+	hungerModifier float64 // rating of 0-2 determining hunger's effect on snake's movement
+	fearModifier float64 = 1 // rating of 0-2 determining pessimism's effect on snake's movement
 	directionShift = map[Direction][]int {
 		Up: {-1, 0},
 		Left: {0, -1},
@@ -18,6 +19,8 @@ var (
 		Down: {1, 0},
 	}
 )
+
+
 
 /*	printMatrix
 *		Prints either a value grid or board representation of the matrix
@@ -91,7 +94,11 @@ func (matrix Matrix) populateMatrix(data Req) {
 
 		for p := range snake.Body[1:length] {
 			tail := &snake.Body[p]
+			self := id == data.You.ID
 			matrix.Matrix[tail.Y][tail.X].Tenure = length - 1 - p
+			if self {
+				matrix.Matrix[tail.Y][tail.X].Self = self
+			}
 		}
 	}
 } 
@@ -110,9 +117,7 @@ func (matrix Matrix) initMatrix(data Req) {
 	var width, height int = data.Board.Width, data.Board.Height
 	for y := range matrix.Matrix {
 		for x := range matrix.Matrix[y] {
-			var c int = 0
-			var f bool = false
-			var v float32 = 1
+			var v float64 = 1
 
 			// Give edge & corner squares a lower base value 
 			if x == 0 || x == width - 1 {
@@ -124,12 +129,14 @@ func (matrix Matrix) initMatrix(data Req) {
 
 			// Add random value to square value
 			if randomModifier != 0 {
-				v += rand.Float32() * randomModifier
+				v += rand.Float64() * randomModifier
 			}
 
 			matrix.Matrix[y][x] = Square{
-				Tenure: c,
-				Food: f,
+				Tenure: 0,
+				Danger: 0,
+				Food: false,
+				Self: false,
 				Base: v,
 			}
 		}
@@ -149,19 +156,24 @@ func (matrix Matrix) initMatrix(data Req) {
 *	description:
 *		lorem ipsum
 */
-func (matrix Matrix) rateSquare(y int, x int, origin Direction, distance int, depth int) float32 {
+func (matrix Matrix) rateSquare(y int, x int, origin Direction, distance int, depth int, grownby int) float64 {
 	// return 0 if out of bounds
 	if x == -1 || x == matrix.Width || y == -1 || y == matrix.Height {
 		return 0
 	}
 	// return 0 if occupied square
-	if matrix.Matrix[y][x].Tenure >= distance {
+	eatenOffset := 0
+	if matrix.Matrix[y][x].Self {
+		eatenOffset = grownby
+	}
+	if matrix.Matrix[y][x].Tenure + eatenOffset >= distance {
 		return 0
 	}
 
 	base := matrix.Matrix[y][x].Base
 	if matrix.Matrix[y][x].Food {
-		base += float32(100 / (distance * distance)) * hungerModifier
+		grownby += 1
+		base += float64(100 / (distance * distance)) * hungerModifier
 	}
 
 	// base case
@@ -178,7 +190,7 @@ func (matrix Matrix) rateSquare(y int, x int, origin Direction, distance int, de
 	}
 	delete(nodes, origin)
 
-	var rating float32 = 0
+	var rating float64 = 0
 
 	for direction, opposite := range nodes {
 		value:= matrix.rateSquare(
@@ -187,6 +199,7 @@ func (matrix Matrix) rateSquare(y int, x int, origin Direction, distance int, de
 			opposite,
 			distance + 1,
 			depth - 1,
+			grownby,
 		)
 		rating += base * value / 3
 	}
@@ -214,10 +227,11 @@ func step(data Req) Direction {
     	matrix.Matrix[i] = allocation[i*matrix.Width: (i+1)*matrix.Width]
 	}
 
-	// fmt.Println()
-	// fmt.Printf("%s: ", "turn")
-	// fmt.Printf("%d", data.Turn)
-	// fmt.Println()
+	fmt.Println()
+	fmt.Printf("%s: ", "turn")
+	fmt.Println()
+	fmt.Printf("%d", data.Turn)
+	fmt.Println()
 	matrix.initMatrix(data)
 	// matrix.printMatrix(false) // print matrix values
 	// matrix.printMatrix(true) // print matrix object repr
@@ -241,12 +255,24 @@ func step(data Req) Direction {
 	}
 
 	var next Direction
-	var confidence float32 = 0
+	var confidence float64 = 0
 
-	if data.You.Health > 75 {
+	if data.You.Health > 80 {
 		hungerModifier = 0
+	} else if data.You.Health > 60 {
+		hungerModifier = 0.25
+	} else if data.You.Health > 40 {
+		hungerModifier = 0.5
+	} else if data.You.Health > 20 {
+		hungerModifier = 1
 	} else {
-		hungerModifier = 100
+		hungerModifier = 2
+	}
+
+	// limit depth by snake length
+	limitedDepth := maxDepth
+	if limitedDepth > len(data.You.Body) {
+		limitedDepth = len(data.You.Body)
 	}
 
 	for direction, opposite := range directions {
@@ -255,11 +281,12 @@ func step(data Req) Direction {
 			x0 + directionShift[direction][1],
 			opposite,
 			1,
-			12,
+			limitedDepth,
+			0,
 		)
-		// fmt.Printf("%s: ", direction)
-		// fmt.Printf("%.3f", c)
-		// fmt.Println()
+		fmt.Printf("%s: ", direction)
+		fmt.Printf("%8f", c)
+		fmt.Println()
 		if c > confidence {
 			next = direction
 			confidence = c

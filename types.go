@@ -12,8 +12,10 @@ type Position struct {
 
 type Square struct {
 	Tenure int
+	Danger int
 	Food bool
-	Base float32
+	Self bool
+	Base float64
 }
 
 type Matrix struct {
