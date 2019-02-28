@@ -4,11 +4,12 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"sync"
 )
 
 // global variables
 var (
-	maxDepth int = 12 // maximum iterations of rateSquare the snake will attempt 
+	globalDepth int = 13 // maximum iterations of rateSquare the snake will attempt 
 	randomModifier float64 = 0.1 // range of 0-2 determining entropy's effect on snake's movement
 	hungerModifier float64 // rating of 0-2 determining hunger's effect on snake's movement
 	fearModifier float64 = 1 // rating of 0-2 determining pessimism's effect on snake's movement
@@ -156,7 +157,7 @@ func (matrix Matrix) initMatrix(data Req) {
 *	description:
 *		lorem ipsum
 */
-func (matrix Matrix) rateSquare(y int, x int, origin Direction, distance int, depth int, grownby int) float64 {
+func (matrix Matrix) rateSquare(y int, x int, origin Direction, distance int, depth int, length int, grownby int, history []Position) float64 {
 	// return 0 if out of bounds
 	if x == -1 || x == matrix.Width || y == -1 || y == matrix.Height {
 		return 0
@@ -168,6 +169,18 @@ func (matrix Matrix) rateSquare(y int, x int, origin Direction, distance int, de
 	}
 	if matrix.Matrix[y][x].Tenure + eatenOffset >= distance {
 		return 0
+	}
+	for p := range history {
+		pos := &history[p]
+		if x == pos.X {
+			if y == pos.Y {
+				return 0
+			}
+		}
+	}
+	history = append(history, Position{y, x})
+	if len(history) >= length + grownby {
+		history = history[1:]
 	}
 
 	base := matrix.Matrix[y][x].Base
@@ -199,7 +212,9 @@ func (matrix Matrix) rateSquare(y int, x int, origin Direction, distance int, de
 			opposite,
 			distance + 1,
 			depth - 1,
+			length,
 			grownby,
+			history,
 		)
 		rating += base * value / 3
 	}
@@ -227,11 +242,10 @@ func step(data Req) Direction {
     	matrix.Matrix[i] = allocation[i*matrix.Width: (i+1)*matrix.Width]
 	}
 
-	fmt.Println()
-	fmt.Printf("%s: ", "turn")
-	fmt.Println()
-	fmt.Printf("%d", data.Turn)
-	fmt.Println()
+	// fmtfmt.Println()
+	// fmt.Printf("%s: ", "turn")
+	// fmt.Printf("%d", data.Turn)
+	// fmt.Println()
 	matrix.initMatrix(data)
 	// matrix.printMatrix(false) // print matrix values
 	// matrix.printMatrix(true) // print matrix object repr
@@ -269,29 +283,49 @@ func step(data Req) Direction {
 		hungerModifier = 2
 	}
 
+	length := len(data.You.Body)
+
 	// limit depth by snake length
-	limitedDepth := maxDepth
-	if limitedDepth > len(data.You.Body) {
-		limitedDepth = len(data.You.Body)
+	localDepth := globalDepth
+	if localDepth > length + 5 {
+		localDepth = length + 5
+	} else if length > 100 {
+		localDepth = 16
+	} else if length > 80 {
+		localDepth = 15
+	} else if length > 60 {
+		localDepth = 14
 	}
 
+	// fmt.Printf("%s: ", "depth")
+	// fmt.Printf("%d", localDepth)
+	// fmt.Println()
+
+	var wg sync.WaitGroup
 	for direction, opposite := range directions {
-		var c = matrix.rateSquare(
-			y0 + directionShift[direction][0],
-			x0 + directionShift[direction][1],
-			opposite,
-			1,
-			limitedDepth,
-			0,
-		)
-		fmt.Printf("%s: ", direction)
-		fmt.Printf("%8f", c)
-		fmt.Println()
-		if c > confidence {
-			next = direction
-			confidence = c
-		}
+		wg.Add(1)
+		go func(y int, x int, direction Direction, opposite Direction, depth int, length int) {
+			var c = matrix.rateSquare(
+				y + directionShift[direction][0],
+				x + directionShift[direction][1],
+				opposite,
+				1,
+				depth,
+				length,
+				0,
+				[]Position{},
+			)
+			defer wg.Done()
+			// fmt.Printf("%s: ", direction)
+			// fmt.Printf("%8f", c)
+			// fmt.Println()
+			if c > confidence {
+				next = direction
+				confidence = c
+			}
+		}(y0, x0, direction, opposite, localDepth, length)
 	}
+	wg.Wait()
 
 	return next
 }
