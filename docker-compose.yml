@@ -1,7 +1,7 @@
 version: "3.7"
 
 services:
-  x-snake:
+  go-snake-go:
     build: .
     image: gcr.io/sean-clarke-go-snake-go/go-snake-go
     container_name: go-snake-go

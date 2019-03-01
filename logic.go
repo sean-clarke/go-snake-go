@@ -2,61 +2,8 @@ package main
 
 
 import (
-	// "fmt"
 	"math/rand"
 )
-
-// global variables
-var (
-	directionShift = map[Direction][]int {
-		Up: {-1, 0},
-		Left: {0, -1},
-		Right: {0, 1},
-		Down: {1, 0},
-	}
-)
-
-/*	printMatrix
-*		Prints either a value grid or board representation of the matrix
-*	type:
-*		Matrix
-*	parameters:
-*		bool - true prints board representation, false prints square values
-*	returns:
-*		nil
-*//*
-func (matrix Matrix) printMatrix(repr bool) {
-	if repr {
-		for y := range matrix.Matrix {
-			for x := range matrix.Matrix[y] {
-				if matrix.Matrix[y][x].Food {
-					fmt.Printf("%s ", "F")
-				} else if matrix.Matrix[y][x].Tenure > 9 {
-					fmt.Printf("%d", matrix.Matrix[y][x].Tenure)
-				} else {
-					fmt.Printf("%d ", matrix.Matrix[y][x].Tenure)
-				}
-			}
-			fmt.Printf("%s", "\n")
-		}
-		fmt.Println("")
-		return
-	}
-	for y := range matrix.Matrix {
-		for x := range matrix.Matrix[y] {
-			fmt.Printf("%.2f    ", matrix.Matrix[y][x].Base)
-		}
-		fmt.Printf("%s", "\n")
-		fmt.Println("")
-		fmt.Println("")
-	}
-	fmt.Println("")
-	fmt.Println("")
-	fmt.Println("")
-	fmt.Println("")
-	fmt.Println("")
-}
-*/
 
 /*
 *	exp
@@ -79,11 +26,71 @@ func exp(base float64, power float64) float64 {
 }
 
 /*
+*	flip
+*		Returns the flipped 
+*	parameters:
+*		start Position
+*		dir Direction
+*	returns:
+*		Position
+*/
+func flip(dir Direction) Direction {
+	switch dir {
+	case "up":
+		return "down"
+	case "left":
+		return "right"
+	case "right":
+		return "left"
+	case "down":
+		return "up"
+	default:
+		return "down"
+	}
+}
+
+/*
+*	move
+*		Gets the postition from start after moving in dir direction
+*	parameters:
+*		start Position
+*		dir Direction
+*	returns:
+*		Position
+*/
+func move(start Position, dir Direction) Position {
+	switch dir {
+	case "up":
+		return Position{start.X, start.Y - 1}
+	case "left":
+		return Position{start.X - 1, start.Y}
+	case "right":
+		return Position{start.X + 1, start.Y}
+	case "down":
+		return Position{start.X, start.Y + 1}
+	default:
+		return start
+	}
+}
+
+/*
+*	getNeighbours
+*		Gets the postitions from start after moving in dir direction
+*	parameters:
+*		home Position
+*		directions []Direction
+*	returns:
+*		[]Position
+*/
+func getNeighbours(home Position, directions []Direction) []Position {
+	return []Position{}
+}
+
+/*
 *	rateSquare
-*		Recursively rates a square by its context in the game
+*		Recursively rates a square by its child nodes and context in the game 
 *	paramaters:
-*		y int
-*		x int
+*		pos Position
 *		origin Direction
 *		distance int
 *		depth int
@@ -94,7 +101,9 @@ func exp(base float64, power float64) float64 {
 *	returns:
 *		Rating{float64, int}
 */
-func (matrix *Matrix) rateSquare(y int, x int, origin Direction, distance int, depth int, length int, grownby int, health int, history []Position) Rating {
+func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, depth int, length int, grownby int, health int, history []Position) Rating {
+	var x, y int = pos.X, pos.Y
+
 	// out of bounds
 	if x == -1 || x == matrix.Width || y == -1 || y == matrix.Height {
 		return Rating{0, distance}
@@ -125,8 +134,8 @@ func (matrix *Matrix) rateSquare(y int, x int, origin Direction, distance int, d
 	if matrix.Matrix[y][x].Food {
 		grownby += 1
 		// to promote moderation, 25 <-> 20, 4 <-> 2
-		var hungerModifier float64 = 5 / (exp(2, float64(health) / 50))
-		base += float64(100 / (distance * distance)) * 5 * hungerModifier
+		var hungerModifier float64 = 4 / (exp(2, float64(health) / 25))
+		base += float64(100 / (distance * distance)) * 4 * hungerModifier
 		health = 100
 	}
 
@@ -156,8 +165,7 @@ func (matrix *Matrix) rateSquare(y int, x int, origin Direction, distance int, d
 
 	for direction, opposite := range directions {
 		node := matrix.rateSquare(
-			y + directionShift[direction][0],
-			x + directionShift[direction][1],
+			move(pos, direction),
 			opposite,
 			distance + 1,
 			depth - 1,
@@ -184,26 +192,42 @@ func (matrix *Matrix) rateSquare(y int, x int, origin Direction, distance int, d
 *		Direction
 */
 func step(data Req) Direction {
-	width := data.Board.Width
-	height := data.Board.Height
-	length := len(data.You.Body)
+	bWidth := data.Board.Width
+	bHeight := data.Board.Height
+	mHead := Position{data.You.Body[0].X, data.You.Body[0].Y}
+	mX, mY := mHead.X, mHead.Y
+	mLength := len(data.You.Body)
+
+	var directions = map[Direction]Direction{
+		Up: Down,
+		Left: Right,
+		Right: Left,
+		Down: Up,
+	}
+
+	var x1, y1 int = data.You.Body[1].X, data.You.Body[1].Y
+
+	if mX < x1 {
+		delete(directions, Right)
+	} else if mX > x1 {
+		delete(directions, Left)
+	} else if mY < y1 {
+		delete(directions, Down)
+	} else if mY > y1 {
+		delete(directions, Up)
+	}
 
 	var matrix = Matrix{
-		make([][]Square, data.Board.Height),
-		width,
-		height,
+		make([][]Square, bHeight),
+		bWidth,
+		bHeight,
 		[]Head{},
 		[]Position{},
 	}
-	var allocation = make([]Square, matrix.Width * matrix.Height)
+	var allocation = make([]Square, bHeight * bWidth)
 	for i := range matrix.Matrix {
-    	matrix.Matrix[i] = allocation[i*matrix.Width: (i+1)*matrix.Width]
+    	matrix.Matrix[i] = allocation[i*bWidth: (i+1)*bWidth]
 	}
-
-	// fmtfmt.Println()
-	// fmt.Printf("%s: ", "turn")
-	// fmt.Printf("%d", data.Turn)
-	// fmt.Println()
 
 	// createMatrix
 	for y := range matrix.Matrix {
@@ -212,14 +236,14 @@ func step(data Req) Direction {
 			var heatmap bool = true
 
 			// Give edge & corner squares a lower base value (and )
-			if x == 0 || x == width - 1 {
+			if x == 0 || x == bWidth - 1 {
 				v -= 0.25
-			} else if heatmap && (y == 2 || y == height - 3) {
+			} else if heatmap && (y == 2 || y == bHeight - 3) {
 				v += 0.25
 			}
-			if y == 0 || y == height - 1 {
+			if y == 0 || y == bHeight - 1 {
 				v -= 0.25
-			} else if heatmap && (x == 2 || x == width - 3) {
+			} else if heatmap && (x == 2 || x == bWidth - 3) {
 				v += 0.25
 			}
 
@@ -241,13 +265,6 @@ func step(data Req) Direction {
 		}
 	}
 
-	var directions = map[Direction]Direction{
-		Up: Down,
-		Left: Right,
-		Right: Left,
-		Down: Up,
-	}
-
 	// populateMatrix
 	for i := range data.Board.Food {
 		food := &data.Board.Food[i]
@@ -259,35 +276,35 @@ func step(data Req) Direction {
 		snake := &data.Board.Snakes[i]
 		id := snake.ID
 		head := snake.Body[0]
-		size := len(snake.Body)
+		oLength := len(snake.Body)
 
 		if id != data.You.ID {
-			matrix.Heads = append(matrix.Heads, Head{Position{head.Y, head.X}, size})
+			matrix.Heads = append(matrix.Heads, Head{Position{head.Y, head.X}, oLength})
 
 			// generate squares next to head
 			var neighbours []Position
 			if (head.X > 0) {
 				neighbours = append(neighbours, Position{head.X - 1, head.Y})
 			}
-			if (head.X < width - 1) {
+			if (head.X < bWidth - 1) {
 				neighbours = append(neighbours, Position{head.X + 1, head.Y})
 			}
 			if (head.Y > 0) {
 				neighbours = append(neighbours, Position{head.X, head.Y - 1})
 			}
-			if (head.Y < height - 1) {
+			if (head.Y < bHeight - 1) {
 				neighbours = append(neighbours, Position{head.X, head.Y + 1})
 			}
 
 			// for squares next to snakes heads...
-			if size >= length {
+			if oLength >= mLength {
 				// ...if snake is larger than us, set base to ~0
 				for neighbour := range neighbours {
 					yard := &neighbours[neighbour]
-					matrix.Matrix[yard.X][yard.Y].Base = 0.001
+					matrix.Matrix[yard.X][yard.Y].Base = 0
 					matrix.Matrix[yard.X][yard.Y].Danger = 1
 				}
-			} else if length > size {
+			} else if mLength > oLength {
 				// ...if snake is smaller than us, set danger to -1
 				for neighbour := range neighbours {
 					yard := &neighbours[neighbour]
@@ -295,83 +312,63 @@ func step(data Req) Direction {
 				}
 			}
 		}
-		matrix.Matrix[head.Y][head.X].Tenure = size - 1
+		matrix.Matrix[head.Y][head.X].Tenure = oLength - 1
 
-		for p := range snake.Body[1:size] {
+		for p := range snake.Body[1:oLength] {
 			tail := &snake.Body[p]
 			self := id == data.You.ID
-			matrix.Matrix[tail.Y][tail.X].Tenure = size - 1 - p
+			matrix.Matrix[tail.Y][tail.X].Tenure = oLength - 1 - p
 			if self {
 				matrix.Matrix[tail.Y][tail.X].Self = self
 			}
 		}
 	}
 
-	// matrix.printMatrix(false) // print matrix values
-	// matrix.printMatrix(true) // print matrix object repr
-	var x0, x1, y0, y1 int = data.You.Body[0].X, data.You.Body[1].X, data.You.Body[0].Y, data.You.Body[1].Y
-	
-	if x0 < x1 {
-		delete(directions, Right)
-	} else if x0 > x1 {
-		delete(directions, Left)
-	} else if y0 < y1 {
-		delete(directions, Down)
-	} else if y0 > y1 {
-		delete(directions, Up)
-	}
-
-	var next Direction
-	var confidence float64 = 0
-
 	// limit depth by snake length
-	var localDepth int = 12 // maximum iterations of rateSquare the snake will attempt 
-	if length < 50 {
-		if localDepth > length + 2 {
-			localDepth = length + 2
+	var localDepth int = 12
+	if mLength < 50 {
+		if localDepth > mLength + 2 {
+			localDepth = mLength + 2
 		}
 	} else {
-		localDepth += (length - 30) / 18
+		localDepth += (mLength - 30) / 18
 	}
 
-	// fmt.Printf("%s: ", "depth")
-	// fmt.Printf("%d", localDepth)
-	// fmt.Println()
-
+	// concurrently rate potential moves
 	ch := make(chan Packet)
 	defer close(ch)
-	for direction, opposite := range directions {
-		go func(direction Direction, opposite Direction) {
+	for _, direction := range directions {
+		go func(direction Direction) {
 			var rating = matrix.rateSquare(
-				y0 + directionShift[direction][0],
-				x0 + directionShift[direction][1],
-				opposite,
+				move(Position{mX, mY}, direction),
+				flip(direction),
 				1,
 				localDepth,
-				length,
+				mLength,
 				0,
 				data.You.Health,
 				[]Position{},
 			)
 			ch <- Packet{direction, rating}
-		}(direction, opposite)	
+		}(direction)	
 	}
 
-	reach := 0
+	// choose best move
+	var next Direction
+	var confidence float64 = 0
+	var reach int = 0
 
 	for i := 0; i < len(directions); i++ {
 		packet := <-ch
-		// fmt.Printf("%s: ", packet.Dir)
-		// fmt.Printf("%8f", packet.Rating.Value)
-		// fmt.Println()
-		// choose highest rated path
+
+		// prefer highest rated move
 		if packet.Rating.Value > confidence {
 			next = packet.Dir
 			confidence = packet.Rating.Value
-		// fallback on longest path if death is inevitable
+		// logic for longest path fallback if death is inevitable (ie. confidence == 0)
 		} else if confidence == 0 && packet.Rating.Distance > reach {
-			reach = packet.Rating.Distance
 			next = packet.Dir
+			reach = packet.Rating.Distance
 		}
 	}
 
