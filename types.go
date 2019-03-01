@@ -10,6 +10,11 @@ type Position struct {
 	X int
 }
 
+type Head struct {
+	Pos Position
+	Length int
+}
+
 type Square struct {
 	Tenure int
 	Danger int
@@ -22,7 +27,7 @@ type Matrix struct {
 	Matrix [][]Square
 	Width int
 	Height int
-	Heads []Position
+	Heads []Head
 	Food []Position
 }
 

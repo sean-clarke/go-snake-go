@@ -8,7 +8,6 @@ import (
 
 // global variables
 var (
-	hungerModifier float64 // rating of 0-2 determining hunger's effect on snake's movement
 	directionShift = map[Direction][]int {
 		Up: {-1, 0},
 		Left: {0, -1},
@@ -58,103 +57,15 @@ func (matrix Matrix) printMatrix(repr bool) {
 	fmt.Println("")
 }
 */
-/*
-*	populateMatrix
-*		Sets the food and tenure values of the matrix's squares
-*	type:
-*		matrix Matrix
-*	parameters:
-*		data Req
-*	returns:
-*		nil
-*	description:
-*		lorem ipsum
-*/
-func (matrix Matrix) populateMatrix(data Req) {
-	// set food
-	for i := range data.Board.Food {
-		food := &data.Board.Food[i]
-		matrix.Matrix[food.Y][food.X].Food = true
-	}
-
-	// set tenure / matrix's heads
-	for i := range data.Board.Snakes {
-		snake := &data.Board.Snakes[i]
-		id := snake.ID
-		head := snake.Body[0]
-		length := len(snake.Body)
-
-		if id != data.You.ID {
-			matrix.Heads = append(matrix.Heads, Position{head.Y, head.X})
-		}
-		matrix.Matrix[head.Y][head.X].Tenure = length - 1
-
-		for p := range snake.Body[1:length] {
-			tail := &snake.Body[p]
-			self := id == data.You.ID
-			matrix.Matrix[tail.Y][tail.X].Tenure = length - 1 - p
-			if self {
-				matrix.Matrix[tail.Y][tail.X].Self = self
-			}
-		}
-	}
-} 
-
-/*
-*	initMatrix
-*		Creates the matrix's squares and call's populateMatrix
-*	type:
-*		matrix Matrix
-*	paramaters:
-*		data Req
-*	returns:
-*		nil
-*	description:
-*		lorem ipsum
-*/
-func (matrix Matrix) initMatrix(data Req) {
-	var width, height int = data.Board.Width, data.Board.Height
-	for y := range matrix.Matrix {
-		for x := range matrix.Matrix[y] {
-			var v float64 = 1
-
-			// Give edge & corner squares a lower base value 
-			if x == 0 || x == width - 1 {
-				v -= 0.25
-			}
-			if y == 0 || y == height - 1 {
-				v -= 0.25
-			}
-
-			// Initialize randomModifier
-			var randomModifier float64 = 0.1
-
-			// Increase square value by random value if randomModifier > 0
-			if randomModifier != 0 {
-				v += rand.Float64() * randomModifier
-			}
-
-			matrix.Matrix[y][x] = Square{
-				Tenure: 0,
-				Danger: 0,
-				Food: false,
-				Self: false,
-				Base: v,
-			}
-		}
-	}
-	matrix.populateMatrix(data)
-}
 
 /*
 *	exp
+*		Standard exponent function
 *	parameters:
 *		base float64
 *		power float 64
 *	returns:
-*		result float64
-*	description:
-*		lorem ipsum
+*		float64
 */
 func exp(base float64, power float64) float64 {
 	if power == 0 {
@@ -169,16 +80,21 @@ func exp(base float64, power float64) float64 {
 
 /*
 *	rateSquare
+*		Recursively rates a square by its context in the game
 *	paramaters:
+*		y int
+*		x int
 *		origin Direction
+*		distance int
 *		depth int
+*		length int
+*		grownby int
+*		health int
+*		history []Position{int, int}
 *	returns:
-*		rating int
-*	description:
-*		lorem ipsum
+*		Rating{float64, int}
 */
 func (matrix *Matrix) rateSquare(y int, x int, origin Direction, distance int, depth int, length int, grownby int, health int, history []Position) Rating {
-
 	// out of bounds
 	if x == -1 || x == matrix.Width || y == -1 || y == matrix.Height {
 		return Rating{0, distance}
@@ -209,8 +125,8 @@ func (matrix *Matrix) rateSquare(y int, x int, origin Direction, distance int, d
 	if matrix.Matrix[y][x].Food {
 		grownby += 1
 		// to promote moderation, 25 <-> 20, 4 <-> 2
-		var hungerModifier float64 = 4 / (exp(2, float64(health) / 25))
-		base += float64(100 / (distance * distance)) * 4 * hungerModifier
+		var hungerModifier float64 = 5 / (exp(2, float64(health) / 50))
+		base += float64(100 / (distance * distance)) * 5 * hungerModifier
 		health = 100
 	}
 
@@ -261,19 +177,22 @@ func (matrix *Matrix) rateSquare(y int, x int, origin Direction, distance int, d
 
 /*
 *	step
+*		main logic function that returns calculated approximate best next move
 *	paramaters:
-*		Req
+*		data Req
 *	returns:
 *		Direction
-*	description:
-*		lorem ipsum
 */
 func step(data Req) Direction {
+	width := data.Board.Width
+	height := data.Board.Height
+	length := len(data.You.Body)
+
 	var matrix = Matrix{
 		make([][]Square, data.Board.Height),
-		data.Board.Width,
-		data.Board.Height,
-		[]Position{},
+		width,
+		height,
+		[]Head{},
 		[]Position{},
 	}
 	var allocation = make([]Square, matrix.Width * matrix.Height)
@@ -285,9 +204,42 @@ func step(data Req) Direction {
 	// fmt.Printf("%s: ", "turn")
 	// fmt.Printf("%d", data.Turn)
 	// fmt.Println()
-	matrix.initMatrix(data)
-	// matrix.printMatrix(false) // print matrix values
-	// matrix.printMatrix(true) // print matrix object repr
+
+	// createMatrix
+	for y := range matrix.Matrix {
+		for x := range matrix.Matrix[y] {
+			var v float64 = 1
+			var heatmap bool = true
+
+			// Give edge & corner squares a lower base value (and )
+			if x == 0 || x == width - 1 {
+				v -= 0.25
+			} else if heatmap && (y == 2 || y == height - 3) {
+				v += 0.25
+			}
+			if y == 0 || y == height - 1 {
+				v -= 0.25
+			} else if heatmap && (x == 2 || x == width - 3) {
+				v += 0.25
+			}
+
+			// Initialize randomModifier
+			var randomModifier float64 = 0.1
+
+			// Increase square value by random value if randomModifier > 0
+			if randomModifier != 0 {
+				v += rand.Float64() * randomModifier
+			}
+
+			matrix.Matrix[y][x] = Square{
+				Tenure: 0,
+				Danger: 0,
+				Food: false,
+				Self: false,
+				Base: v,
+			}
+		}
+	}
 
 	var directions = map[Direction]Direction{
 		Up: Down,
@@ -295,6 +247,68 @@ func step(data Req) Direction {
 		Right: Left,
 		Down: Up,
 	}
+
+	// populateMatrix
+	for i := range data.Board.Food {
+		food := &data.Board.Food[i]
+		matrix.Matrix[food.Y][food.X].Food = true
+	}
+
+	// set tenure / matrix's heads
+	for i := range data.Board.Snakes {
+		snake := &data.Board.Snakes[i]
+		id := snake.ID
+		head := snake.Body[0]
+		size := len(snake.Body)
+
+		if id != data.You.ID {
+			matrix.Heads = append(matrix.Heads, Head{Position{head.Y, head.X}, size})
+
+			// generate squares next to head
+			var neighbours []Position
+			if (head.X > 0) {
+				neighbours = append(neighbours, Position{head.X - 1, head.Y})
+			}
+			if (head.X < width - 1) {
+				neighbours = append(neighbours, Position{head.X + 1, head.Y})
+			}
+			if (head.Y > 0) {
+				neighbours = append(neighbours, Position{head.X, head.Y - 1})
+			}
+			if (head.Y < height - 1) {
+				neighbours = append(neighbours, Position{head.X, head.Y + 1})
+			}
+
+			// for squares next to snakes heads...
+			if size >= length {
+				// ...if snake is larger than us, set base to ~0
+				for neighbour := range neighbours {
+					yard := &neighbours[neighbour]
+					matrix.Matrix[yard.X][yard.Y].Base = 0.001
+					matrix.Matrix[yard.X][yard.Y].Danger = 1
+				}
+			} else if length > size {
+				// ...if snake is smaller than us, set danger to -1
+				for neighbour := range neighbours {
+					yard := &neighbours[neighbour]
+					matrix.Matrix[yard.X][yard.Y].Danger = -1
+				}
+			}
+		}
+		matrix.Matrix[head.Y][head.X].Tenure = size - 1
+
+		for p := range snake.Body[1:size] {
+			tail := &snake.Body[p]
+			self := id == data.You.ID
+			matrix.Matrix[tail.Y][tail.X].Tenure = size - 1 - p
+			if self {
+				matrix.Matrix[tail.Y][tail.X].Self = self
+			}
+		}
+	}
+
+	// matrix.printMatrix(false) // print matrix values
+	// matrix.printMatrix(true) // print matrix object repr
 	var x0, x1, y0, y1 int = data.You.Body[0].X, data.You.Body[1].X, data.You.Body[0].Y, data.You.Body[1].Y
 	
 	if x0 < x1 {
@@ -309,8 +323,6 @@ func step(data Req) Direction {
 
 	var next Direction
 	var confidence float64 = 0
-
-	length := len(data.You.Body)
 
 	// limit depth by snake length
 	var localDepth int = 12 // maximum iterations of rateSquare the snake will attempt 
