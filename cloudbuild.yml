@@ -1,0 +1,9 @@
+steps:
+- name: 'gcr.io/cloud-builders/go'
+  args: ['install', '.']
+- name: 'gcr.io/cloud-builders/go'
+  args: ['build', 'main']
+artifacts:
+  objects:
+    location: 'gs://sean-clarke-go-snake-go.appspot.com/'
+    paths: ["/"]
