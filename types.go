@@ -31,13 +31,13 @@ type Matrix struct {
 	Food []Position
 }
 
-type Direction string
+type Direction int
 
 const (
-	Up Direction = "up"
-	Left Direction = "left"
-	Right Direction = "right"
-	Down Direction = "down"
+	Up Direction = 2
+	Left Direction = 3
+	Right Direction = 5
+	Down Direction = 7
 )
 
 type Rating struct {
@@ -46,7 +46,7 @@ type Rating struct {
 }
 
 type Packet struct {
-	Dir Direction
+	Direction Direction
 	Rating Rating
 }
 
@@ -82,5 +82,5 @@ type Init struct {
 }
 
 type Resp struct {
-	Move Direction `json:"move"`
+	Move string `json:"move"`
 }

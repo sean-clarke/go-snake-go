@@ -26,6 +26,30 @@ func exp(base float64, power float64) float64 {
 }
 
 /*
+*	expandDirections
+*		expands encoded directions object into a slice of directions
+*	parameters:
+*		encoded int
+*	returns:
+*		[]Direction
+*/
+func expandDirections(encoded int) []Direction {
+	var decoded []Direction
+	if encoded % int(Up) == 0 {
+		decoded = []Direction{Up}
+	}
+	if encoded % int(Left) == 0 {
+		decoded = append(decoded, Left)
+	}
+	if encoded % int(Right) == 0 {
+		decoded = append(decoded, Right)
+	}
+	if encoded % int(Down) == 0 {
+		decoded = append(decoded, Down)
+	}
+	return decoded
+}
+/*
 *	flip
 *		Returns the flipped 
 *	parameters:
@@ -36,16 +60,16 @@ func exp(base float64, power float64) float64 {
 */
 func flip(dir Direction) Direction {
 	switch dir {
-	case "up":
-		return "down"
-	case "left":
-		return "right"
-	case "right":
-		return "left"
-	case "down":
-		return "up"
+	case Up:
+		return Down
+	case Left:
+		return Right
+	case Right:
+		return Left
+	case Down:
+		return Up
 	default:
-		return "down"
+		return Down
 	}
 }
 
@@ -60,14 +84,14 @@ func flip(dir Direction) Direction {
 */
 func move(start Position, dir Direction) Position {
 	switch dir {
-	case "up":
-		return Position{start.X, start.Y - 1}
-	case "left":
-		return Position{start.X - 1, start.Y}
-	case "right":
-		return Position{start.X + 1, start.Y}
-	case "down":
-		return Position{start.X, start.Y + 1}
+	case Up:
+		return Position{start.Y - 1, start.X}
+	case Left:
+		return Position{start.Y, start.X - 1}
+	case Right:
+		return Position{start.Y, start.X + 1}
+	case Down:
+		return Position{start.Y + 1, start.X}
 	default:
 		return start
 	}
@@ -83,7 +107,11 @@ func move(start Position, dir Direction) Position {
 *		[]Position
 */
 func getNeighbours(home Position, directions []Direction) []Position {
-	return []Position{}
+	neighbours := []Position{}
+	for _, direction := range directions {
+		neighbours = append(neighbours, move(home, direction))
+	}
+	return neighbours
 }
 
 /*
@@ -102,10 +130,15 @@ func getNeighbours(home Position, directions []Direction) []Position {
 *		Rating{float64, int}
 */
 func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, depth int, length int, grownby int, health int, history []Position) Rating {
-	var x, y int = pos.X, pos.Y
+	var y, x int = pos.Y, pos.X
 
 	// out of bounds
 	if x == -1 || x == matrix.Width || y == -1 || y == matrix.Height {
+		return Rating{0, distance}
+	}
+
+	// forbidden move
+	if matrix.Matrix[y][x].Base == 0 {
 		return Rating{0, distance}
 	}
 
@@ -119,10 +152,10 @@ func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, d
 	}
 
 	// occupied by current path
-	for p := range history {
-		pos := &history[p]
-		if x == pos.X {
-			if y == pos.Y {
+	for h := range history {
+		past := &history[h]
+		if x == past.X {
+			if y == past.Y {
 				return Rating{0, distance}
 			}
 		}
@@ -153,20 +186,15 @@ func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, d
 	}
 
 	// continue search (recursive case)
-	var directions = map[Direction]Direction{
-		Up: Down,
-		Left: Right,
-		Right: Left,
-		Down: Up,
-	}
-	delete(directions, origin)
-
+	var directions = expandDirections(210 / int(origin))
+ 
 	var rating Rating
 
-	for direction, opposite := range directions {
+	// modify rating by rating of potential future moves
+	for _, direction := range directions {
 		node := matrix.rateSquare(
 			move(pos, direction),
-			opposite,
+			flip(direction),
 			distance + 1,
 			depth - 1,
 			length,
@@ -189,32 +217,27 @@ func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, d
 *	paramaters:
 *		data Req
 *	returns:
-*		Direction
+*		string
 */
-func step(data Req) Direction {
+func step(data Req) string {
 	bWidth := data.Board.Width
 	bHeight := data.Board.Height
-	mHead := Position{data.You.Body[0].X, data.You.Body[0].Y}
+	mHead := Position{data.You.Body[0].Y, data.You.Body[0].X}
 	mX, mY := mHead.X, mHead.Y
 	mLength := len(data.You.Body)
 
-	var directions = map[Direction]Direction{
-		Up: Down,
-		Left: Right,
-		Right: Left,
-		Down: Up,
-	}
+	var directions []Direction
 
 	var x1, y1 int = data.You.Body[1].X, data.You.Body[1].Y
 
 	if mX < x1 {
-		delete(directions, Right)
+		directions = expandDirections(210 / int(Right))
 	} else if mX > x1 {
-		delete(directions, Left)
+		directions = expandDirections(210 / int(Left))
 	} else if mY < y1 {
-		delete(directions, Down)
+		directions = expandDirections(210 / int(Down))
 	} else if mY > y1 {
-		delete(directions, Up)
+		directions = expandDirections(210 / int(Up))
 	}
 
 	var matrix = Matrix{
@@ -284,16 +307,16 @@ func step(data Req) Direction {
 			// generate squares next to head
 			var neighbours []Position
 			if (head.X > 0) {
-				neighbours = append(neighbours, Position{head.X - 1, head.Y})
+				neighbours = append(neighbours, Position{head.Y, head.X - 1})
 			}
 			if (head.X < bWidth - 1) {
-				neighbours = append(neighbours, Position{head.X + 1, head.Y})
+				neighbours = append(neighbours, Position{head.Y, head.X + 1})
 			}
 			if (head.Y > 0) {
-				neighbours = append(neighbours, Position{head.X, head.Y - 1})
+				neighbours = append(neighbours, Position{head.Y - 1, head.X})
 			}
 			if (head.Y < bHeight - 1) {
-				neighbours = append(neighbours, Position{head.X, head.Y + 1})
+				neighbours = append(neighbours, Position{head.Y + 1, head.X})
 			}
 
 			// for squares next to snakes heads...
@@ -340,7 +363,7 @@ func step(data Req) Direction {
 	for _, direction := range directions {
 		go func(direction Direction) {
 			var rating = matrix.rateSquare(
-				move(Position{mX, mY}, direction),
+				move(Position{mY, mX}, direction),
 				flip(direction),
 				1,
 				localDepth,
@@ -360,17 +383,27 @@ func step(data Req) Direction {
 
 	for i := 0; i < len(directions); i++ {
 		packet := <-ch
-
 		// prefer highest rated move
 		if packet.Rating.Value > confidence {
-			next = packet.Dir
+			next = packet.Direction
 			confidence = packet.Rating.Value
 		// logic for longest path fallback if death is inevitable (ie. confidence == 0)
 		} else if confidence == 0 && packet.Rating.Distance > reach {
-			next = packet.Dir
+			next = packet.Direction
 			reach = packet.Rating.Distance
 		}
 	}
 
-	return next
+	switch next {
+	case Up:
+		return "up"
+	case Left:
+		return "left"
+	case Right:
+		return "right"
+	case Down:
+		return "down"
+	default:
+		return "up"
+	}
 }
