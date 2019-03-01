@@ -1,7 +1,8 @@
 # go-snake-go
 
 ## todo:
-* move hungermodifier logic into the code
-* populate squares with danger value
-* be okay with head ons against weaker snakes
-* figure it out
+* further populate danger
+* create value maps for different play styles
+* optimize fear
+* re-evaluate rating system (should distance decrease value?)
+* mark dangerous food
