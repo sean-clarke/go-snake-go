@@ -6,4 +6,4 @@ steps:
 artifacts:
   objects:
     location: 'gs://sean-clarke-go-snake-go.appspot.com/'
-    paths: ["/*"]
+    paths: ["go-snake-go.exe"]
