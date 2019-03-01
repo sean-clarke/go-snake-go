@@ -106,11 +106,25 @@ func move(start Position, dir Direction) Position {
 *	returns:
 *		[]Position
 */
-func getNeighbours(home Position, directions []Direction) []Position {
+func getNeighbours(home Position, directions []Direction, depth int, limit int) []Position {
 	neighbours := []Position{}
-	for _, direction := range directions {
-		neighbours = append(neighbours, move(home, direction))
+	if depth == 1 {
+		for _, direction := range directions {
+			neighbour := move(home, direction)
+			if neighbour.X >= 0 && neighbour.X < limit && neighbour.Y >= 0 && neighbour.Y < limit {
+				neighbours = append(neighbours, neighbour)
+			}
+		}
+	} else if depth == 2 {
+		// get positions two moves from position
+		for _, direction := range directions {
+			neighboursNeighbours := getNeighbours(move(home, direction), expandDirections(210 / int(flip(direction))), 1, limit)
+			for _, neighbour := range neighboursNeighbours {
+				neighbours = append(neighbours, neighbour)
+			}
+		}
 	}
+
 	return neighbours
 }
 
@@ -167,8 +181,10 @@ func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, d
 	if matrix.Matrix[y][x].Food {
 		grownby += 1
 		// to promote moderation, 25 <-> 20, 4 <-> 2
-		var hungerModifier float64 = 4 / (exp(2, float64(health) / 25))
-		base += float64(100 / (distance * distance)) * 4 * hungerModifier
+		if matrix.Matrix[y][x].Danger < 2 {
+			var hungerModifier float64 = 4 / (exp(2, float64(health) / 25))
+			base += float64(100 / (distance * distance)) * 4 * hungerModifier
+		}
 		health = 100
 	}
 
@@ -213,7 +229,7 @@ func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, d
 
 /*
 *	step
-*		main logic function that returns calculated approximate best next move
+*		Entry logic function that returns calculated approximate best next move
 *	paramaters:
 *		data Req
 *	returns:
@@ -222,23 +238,12 @@ func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, d
 func step(data Req) string {
 	bWidth := data.Board.Width
 	bHeight := data.Board.Height
+	mId := data.You.ID
 	mHead := Position{data.You.Body[0].Y, data.You.Body[0].X}
-	mX, mY := mHead.X, mHead.Y
+	mY, mX := mHead.Y, mHead.X
 	mLength := len(data.You.Body)
 
-	var directions []Direction
-
-	var x1, y1 int = data.You.Body[1].X, data.You.Body[1].Y
-
-	if mX < x1 {
-		directions = expandDirections(210 / int(Right))
-	} else if mX > x1 {
-		directions = expandDirections(210 / int(Left))
-	} else if mY < y1 {
-		directions = expandDirections(210 / int(Down))
-	} else if mY > y1 {
-		directions = expandDirections(210 / int(Up))
-	}
+	var directions []Direction = expandDirections(210)
 
 	var matrix = Matrix{
 		make([][]Square, bHeight),
@@ -271,13 +276,12 @@ func step(data Req) string {
 			}
 
 			// Initialize randomModifier
-			var randomModifier float64 = 0.1
+			var randomModifier float64 = 0.05
 
 			// Increase square value by random value if randomModifier > 0
 			if randomModifier != 0 {
 				v += rand.Float64() * randomModifier
 			}
-
 			matrix.Matrix[y][x] = Square{
 				Tenure: 0,
 				Danger: 0,
@@ -297,49 +301,59 @@ func step(data Req) string {
 	// set tenure / matrix's heads
 	for i := range data.Board.Snakes {
 		snake := &data.Board.Snakes[i]
-		id := snake.ID
-		head := snake.Body[0]
+		oId := snake.ID
+		oY := snake.Body[0].Y
+		oX := snake.Body[0].X
 		oLength := len(snake.Body)
 
-		if id != data.You.ID {
-			matrix.Heads = append(matrix.Heads, Head{Position{head.Y, head.X}, oLength})
+		if oId != mId {
+			matrix.Heads = append(matrix.Heads, Head{Position{oY, oX}, oLength})
 
 			// generate squares next to head
-			var neighbours []Position
-			if (head.X > 0) {
-				neighbours = append(neighbours, Position{head.Y, head.X - 1})
+			var pnd int = 210
+			if (oY == 0) {
+				pnd /= int(Up)
 			}
-			if (head.X < bWidth - 1) {
-				neighbours = append(neighbours, Position{head.Y, head.X + 1})
+			if oX == 0 {
+				pnd /= int(Left)
 			}
-			if (head.Y > 0) {
-				neighbours = append(neighbours, Position{head.Y - 1, head.X})
+			if (oX == bWidth - 1) {
+				pnd /= int(Right)
 			}
-			if (head.Y < bHeight - 1) {
-				neighbours = append(neighbours, Position{head.Y + 1, head.X})
+			if (oY == bHeight - 1) {
+				pnd /= int(Down)
 			}
+			neighbours := getNeighbours(Position{oY, oX}, expandDirections(pnd), 1, bWidth)
+			dangers := getNeighbours(Position{oY, oX}, expandDirections(pnd), 2, bWidth)
 
 			// for squares next to snakes heads...
 			if oLength >= mLength {
 				// ...if snake is larger than us, set base to ~0
 				for neighbour := range neighbours {
 					yard := &neighbours[neighbour]
-					matrix.Matrix[yard.X][yard.Y].Base = 0
-					matrix.Matrix[yard.X][yard.Y].Danger = 1
+					matrix.Matrix[yard.Y][yard.X].Base = 0.001
+					matrix.Matrix[yard.Y][yard.X].Danger = 2
 				}
 			} else if mLength > oLength {
 				// ...if snake is smaller than us, set danger to -1
 				for neighbour := range neighbours {
 					yard := &neighbours[neighbour]
-					matrix.Matrix[yard.X][yard.Y].Danger = -1
+					matrix.Matrix[yard.Y][yard.X].Danger = -1
 				}
 			}
+
+			// for squares two away from snakes heads, decrease base
+			for d := range dangers {
+				danger := &dangers[d]
+				matrix.Matrix[danger.Y][danger.X].Base /= 2
+				matrix.Matrix[danger.Y][danger.X].Danger = 1
+			}
 		}
-		matrix.Matrix[head.Y][head.X].Tenure = oLength - 1
+		matrix.Matrix[oY][oX].Tenure = oLength - 1
 
 		for p := range snake.Body[1:oLength] {
 			tail := &snake.Body[p]
-			self := id == data.You.ID
+			self := oId == mId
 			matrix.Matrix[tail.Y][tail.X].Tenure = oLength - 1 - p
 			if self {
 				matrix.Matrix[tail.Y][tail.X].Self = self
