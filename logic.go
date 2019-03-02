@@ -108,17 +108,18 @@ func move(start Position, dir Direction) Position {
 */
 func getNeighbours(home Position, directions []Direction, depth int, limit int) []Position {
 	neighbours := []Position{}
-	if depth == 1 {
+	// out of bounds
+	if home.X < 0 || home.X == limit || home.Y < 0 || home.Y == limit {} else if depth == 1 {
 		for _, direction := range directions {
 			neighbour := move(home, direction)
 			if neighbour.X >= 0 && neighbour.X < limit && neighbour.Y >= 0 && neighbour.Y < limit {
 				neighbours = append(neighbours, neighbour)
 			}
 		}
-	} else if depth == 2 {
-		// get positions two moves from position
+	} else if depth > 1 {
+		// recursive case
 		for _, direction := range directions {
-			neighboursNeighbours := getNeighbours(move(home, direction), expandDirections(210 / int(flip(direction))), 1, limit)
+			neighboursNeighbours := getNeighbours(move(home, direction), expandDirections(210 / int(flip(direction))), depth - 1, limit)
 			for _, neighbour := range neighboursNeighbours {
 				neighbours = append(neighbours, neighbour)
 			}
@@ -182,8 +183,8 @@ func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, d
 		grownby += 1
 		// to promote moderation, 25 <-> 20, 4 <-> 2
 		if matrix.Matrix[y][x].Danger < 2 {
-			var hungerModifier float64 = 5 / (exp(2, float64(health) / 25))
-			base += float64(100 / (distance * distance)) * 5 * hungerModifier
+			var hungerModifier float64 = 4 / (exp(2, float64(health) / 33))
+			base += float64(100 / (distance * distance)) * 4 * hungerModifier
 		}
 		health = 100
 	}
@@ -236,6 +237,7 @@ func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, d
 *		string
 */
 func step(data Req) string {
+	// set useful variables
 	bWidth := data.Board.Width
 	bHeight := data.Board.Height
 	mId := data.You.ID
@@ -243,8 +245,14 @@ func step(data Req) string {
 	mY, mX := mHead.Y, mHead.X
 	mLength := len(data.You.Body)
 
+	// move validation checker
+	if mLength < 2 {
+		return "up"
+	}
+
 	var directions []Direction = expandDirections(210)
 
+	// create matrix
 	var matrix = Matrix{
 		make([][]Square, bHeight),
 		bWidth,
@@ -257,7 +265,7 @@ func step(data Req) string {
     	matrix.Matrix[i] = allocation[i*bWidth: (i+1)*bWidth]
 	}
 
-	// createMatrix
+	// initMatrix
 	for y := range matrix.Matrix {
 		for x := range matrix.Matrix[y] {
 			var v float64 = 1
@@ -362,7 +370,7 @@ func step(data Req) string {
 	}
 
 	// limit depth by snake length
-	var localDepth int = 12
+	var localDepth int = 13
 	if mLength < 50 {
 		if localDepth > mLength + 2 {
 			localDepth = mLength + 2
