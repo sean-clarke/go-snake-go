@@ -1,10 +1,5 @@
 package main
 
-
-import (
-	"math/rand"
-)
-
 /*
 *	exp
 *		Standard exponent function
@@ -144,7 +139,7 @@ func getNeighbours(home Position, directions []Direction, depth int, limit int) 
 *	returns:
 *		Rating{float64, int}
 */
-func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, depth int, length int, grownby int, health int, history []Position) Rating {
+func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, depth int, length int, longest bool, grownby int, health int, history []Position) Rating {
 	var y, x int = pos.Y, pos.X
 
 	// out of bounds
@@ -181,10 +176,15 @@ func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, d
 	base := matrix.Matrix[y][x].Base
 	if matrix.Matrix[y][x].Food {
 		grownby += 1
-		// to promote moderation, 25 <-> 20, 4 <-> 2
+		var multiplier float64 = 5
+		var divisor float64 = 33
+		if longest && length > 8 {
+			multiplier = 4
+			divisor = 25
+		}
 		if matrix.Matrix[y][x].Danger < 2 {
-			var hungerModifier float64 = 4 / (exp(2, float64(health) / 33))
-			base += float64(100 / (distance * distance)) * 4 * hungerModifier
+			var hungerModifier float64 = multiplier / (exp(2, float64(health) / divisor))
+			base += float64(100 / (distance * distance)) * multiplier * hungerModifier
 		}
 		health = 100
 	}
@@ -215,11 +215,13 @@ func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, d
 			distance + 1,
 			depth - 1,
 			length,
+			longest,
 			grownby,
 			health,
 			history,
 		)
-		rating.Value += base * node.Value / 3
+		node.Value -= 0.1 / (1 + float64(distance) * float64(distance))
+		rating.Value += base * node.Value / 3 
 		if node.Distance > rating.Distance {
 			rating.Distance = node.Distance
 		}
@@ -244,6 +246,7 @@ func step(data Req) string {
 	mHead := Position{data.You.Body[0].Y, data.You.Body[0].X}
 	mY, mX := mHead.Y, mHead.X
 	mLength := len(data.You.Body)
+	longest := true
 
 	// move validation checker
 	if mLength < 2 {
@@ -273,22 +276,38 @@ func step(data Req) string {
 
 			// Give edge & corner squares a lower base value (and )
 			if x == 0 || x == bWidth - 1 {
-				v -= 0.25
-			} else if heatmap && (y == 2 || y == bHeight - 3) {
-				v += 0.25
+				v -= 0.125
+			} else if heatmap {
+				if (y == 2 || y == bHeight - 3) {
+					v += 0.33
+				} else if (y == 1 || y == 3 || y == bHeight - 2 || y == bHeight - 4) {
+					v += 0.16
+				}
 			}
 			if y == 0 || y == bHeight - 1 {
-				v -= 0.25
-			} else if heatmap && (x == 2 || x == bWidth - 3) {
-				v += 0.25
+				v -= 0.125
+			} else if heatmap {
+				if (x == 2 || x == bWidth - 3) {
+					v += 0.33
+				} else if (x == 1 || x == 3 || x == bWidth - 2 || x == bWidth - 4) {
+					v += 0.16
+				}
+			}
+
+			if mLength > 8 {
+				if (x == 0 && y == bHeight / 2) || (x == bWidth - 1 && y == bHeight / 2) || (y == 0 && x == bWidth / 2) || (y == bHeight - 1 && x == bWidth / 2) {
+					v += 1
+				} else if (x == 0 && y == bHeight / 2 + 1) || (x == 0 && y == bHeight / 2 - 1) || (x == bWidth - 1 && y == bHeight / 2 + 1) || (x == bWidth - 1 && y == bHeight / 2 - 1) || (y == 0 && x == bWidth / 2 + 1) || (y == 0 && x == bWidth / 2 - 1) || (y == bHeight - 1 && x == bWidth / 2 + 1) || (y == bHeight - 1 && x == bWidth / 2 - 1) {
+					v += 0.66
+				}
 			}
 
 			// Initialize randomModifier
-			var randomModifier float64 = 0.05
+			var randomModifier float64 = 0
 
 			// Increase square value by random value if randomModifier > 0
 			if randomModifier != 0 {
-				v += rand.Float64() * randomModifier
+				//v += rand.Float64() * randomModifier
 			}
 			matrix.Matrix[y][x] = Square{
 				Tenure: 0,
@@ -336,10 +355,11 @@ func step(data Req) string {
 
 			// for squares next to snakes heads...
 			if oLength >= mLength {
+				longest = false
 				// ...if snake is larger than us, set base to ~0
 				for neighbour := range neighbours {
 					yard := &neighbours[neighbour]
-					matrix.Matrix[yard.Y][yard.X].Base = 0.001
+					matrix.Matrix[yard.Y][yard.X].Base = 0.00001
 					matrix.Matrix[yard.Y][yard.X].Danger = 2
 				}
 			} else if mLength > oLength {
@@ -356,6 +376,9 @@ func step(data Req) string {
 				matrix.Matrix[danger.Y][danger.X].Base /= 2
 				matrix.Matrix[danger.Y][danger.X].Danger = 1
 			}
+		} else if mLength > 8 {
+			tail := &snake.Body[len(snake.Body) - 1]
+			matrix.Matrix[tail.Y][tail.X].Base *= 1 + float64(mLength) / 10
 		}
 		matrix.Matrix[oY][oX].Tenure = oLength - 1
 
@@ -370,7 +393,7 @@ func step(data Req) string {
 	}
 
 	// limit depth by snake length
-	var localDepth int = 13
+	var localDepth int = 14
 	if mLength < 50 {
 		if localDepth > mLength + 2 {
 			localDepth = mLength + 2
@@ -390,6 +413,7 @@ func step(data Req) string {
 				1,
 				localDepth,
 				mLength,
+				longest,
 				0,
 				data.You.Health,
 				[]Position{},
