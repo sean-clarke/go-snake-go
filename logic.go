@@ -182,8 +182,8 @@ func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, d
 		grownby += 1
 		// to promote moderation, 25 <-> 20, 4 <-> 2
 		if matrix.Matrix[y][x].Danger < 2 {
-			var hungerModifier float64 = 4 / (exp(2, float64(health) / 25))
-			base += float64(100 / (distance * distance)) * 4 * hungerModifier
+			var hungerModifier float64 = 5 / (exp(2, float64(health) / 25))
+			base += float64(100 / (distance * distance)) * 5 * hungerModifier
 		}
 		health = 100
 	}
