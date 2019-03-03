@@ -18,7 +18,7 @@ func Start(res http.ResponseWriter, req *http.Request) {
 	}
 
 	resp := Init{
-		Color: "#AFEEEE",
+		Color: "#4080E0",
 		Head: "pixel",
 		Tail: "pixel",
 	}

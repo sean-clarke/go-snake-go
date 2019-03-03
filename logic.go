@@ -120,7 +120,6 @@ func getNeighbours(home Position, directions []Direction, depth int, limit int) 
 			}
 		}
 	}
-
 	return neighbours
 }
 
@@ -144,8 +143,9 @@ func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, d
 
 	// out of bounds
 	if x == -1 || x == matrix.Width || y == -1 || y == matrix.Height {
-		return Rating{0, distance}
+		return Rating{0, distance - 1}
 	}
+	danger := matrix.Matrix[y][x].Danger
 
 	// forbidden move
 	if matrix.Matrix[y][x].Base == 0 {
@@ -158,7 +158,7 @@ func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, d
 		eatenOffset = grownby
 	}
 	if matrix.Matrix[y][x].Tenure + eatenOffset >= distance {
-		return Rating{0, distance}
+		return Rating{0, distance - 1}
 	}
 
 	// occupied by current path
@@ -176,17 +176,28 @@ func (matrix *Matrix) rateSquare(pos Position, origin Direction, distance int, d
 	base := matrix.Matrix[y][x].Base
 	if matrix.Matrix[y][x].Food {
 		grownby += 1
-		var multiplier float64 = 5
+		var multiplier float64 = 25
 		var divisor float64 = 33
 		if longest && length > 8 {
-			multiplier = 4
+			multiplier = 25
 			divisor = 25
 		}
-		if matrix.Matrix[y][x].Danger < 2 {
+		if danger != 1 && danger != distance {
 			var hungerModifier float64 = multiplier / (exp(2, float64(health) / divisor))
-			base += float64(100 / (distance * distance)) * multiplier * hungerModifier
+			base += float64(100 / (distance * distance)) * hungerModifier
 		}
 		health = 100
+	}
+	if danger == -1 {
+		if distance == 1 {
+			base *= 2
+		} else {
+			base /= 4
+		}
+	} else {
+		if distance == danger {
+			base /= 2
+		}
 	}
 
 	// return base value (base case)
@@ -253,7 +264,21 @@ func step(data Req) string {
 		return "up"
 	}
 
-	var directions []Direction = expandDirections(210)
+	// remove origin direction
+	var directions []Direction
+	var mOriginY, mOriginX int = data.You.Body[1].Y, data.You.Body[1].X
+	
+	if mY < mOriginY {
+		directions = expandDirections(210 / int(Down))
+	} else if mX < mOriginX {
+		directions = expandDirections(210 / int(Right))
+	} else if mX > mOriginX {
+		directions = expandDirections(210 / int(Left))
+	} else if mY > mOriginY {
+		directions = expandDirections(210 / int(Up))
+	} else {
+		directions = expandDirections(210)
+	}
 
 	// create matrix
 	var matrix = Matrix{
@@ -276,7 +301,7 @@ func step(data Req) string {
 
 			// Give edge & corner squares a lower base value (and )
 			if x == 0 || x == bWidth - 1 {
-				v -= 0.125
+				v -= 0.25
 			} else if heatmap {
 				if (y == 2 || y == bHeight - 3) {
 					v += 0.33
@@ -285,7 +310,7 @@ func step(data Req) string {
 				}
 			}
 			if y == 0 || y == bHeight - 1 {
-				v -= 0.125
+				v -= 0.25
 			} else if heatmap {
 				if (x == 2 || x == bWidth - 3) {
 					v += 0.33
@@ -294,7 +319,7 @@ func step(data Req) string {
 				}
 			}
 
-			if mLength > 8 {
+			if mLength > 10 && heatmap {
 				if (x == 0 && y == bHeight / 2) || (x == bWidth - 1 && y == bHeight / 2) || (y == 0 && x == bWidth / 2) || (y == bHeight - 1 && x == bWidth / 2) {
 					v += 1
 				} else if (x == 0 && y == bHeight / 2 + 1) || (x == 0 && y == bHeight / 2 - 1) || (x == bWidth - 1 && y == bHeight / 2 + 1) || (x == bWidth - 1 && y == bHeight / 2 - 1) || (y == 0 && x == bWidth / 2 + 1) || (y == 0 && x == bWidth / 2 - 1) || (y == bHeight - 1 && x == bWidth / 2 + 1) || (y == bHeight - 1 && x == bWidth / 2 - 1) {
@@ -302,13 +327,6 @@ func step(data Req) string {
 				}
 			}
 
-			// Initialize randomModifier
-			var randomModifier float64 = 0
-
-			// Increase square value by random value if randomModifier > 0
-			if randomModifier != 0 {
-				//v += rand.Float64() * randomModifier
-			}
 			matrix.Matrix[y][x] = Square{
 				Tenure: 0,
 				Danger: 0,
@@ -350,17 +368,18 @@ func step(data Req) string {
 			if (oY == bHeight - 1) {
 				pnd /= int(Down)
 			}
+
 			neighbours := getNeighbours(Position{oY, oX}, expandDirections(pnd), 1, bWidth)
 			dangers := getNeighbours(Position{oY, oX}, expandDirections(pnd), 2, bWidth)
 
 			// for squares next to snakes heads...
-			if oLength >= mLength {
+			if oLength > mLength {
 				longest = false
 				// ...if snake is larger than us, set base to ~0
 				for neighbour := range neighbours {
 					yard := &neighbours[neighbour]
-					matrix.Matrix[yard.Y][yard.X].Base = 0.00001
-					matrix.Matrix[yard.Y][yard.X].Danger = 2
+					matrix.Matrix[yard.Y][yard.X].Base = 0
+					matrix.Matrix[yard.Y][yard.X].Danger = 1
 				}
 			} else if mLength > oLength {
 				// ...if snake is smaller than us, set danger to -1
@@ -368,17 +387,28 @@ func step(data Req) string {
 					yard := &neighbours[neighbour]
 					matrix.Matrix[yard.Y][yard.X].Danger = -1
 				}
+			} else {
+				longest = false
+				// ...if snake is same size as us, set base to ~0
+				for neighbour := range neighbours {
+					yard := &neighbours[neighbour]
+					matrix.Matrix[yard.Y][yard.X].Base = 0.25
+					matrix.Matrix[yard.Y][yard.X].Danger = 1
+				}
 			}
 
 			// for squares two away from snakes heads, decrease base
 			for d := range dangers {
 				danger := &dangers[d]
 				matrix.Matrix[danger.Y][danger.X].Base /= 2
-				matrix.Matrix[danger.Y][danger.X].Danger = 1
+				matrix.Matrix[danger.Y][danger.X].Danger = 2
 			}
+
+			tail := &snake.Body[len(snake.Body) - 1]
+			matrix.Matrix[tail.Y][tail.X].Base /= 2.5
 		} else if mLength > 8 {
 			tail := &snake.Body[len(snake.Body) - 1]
-			matrix.Matrix[tail.Y][tail.X].Base *= 1 + float64(mLength) / 10
+			matrix.Matrix[tail.Y][tail.X].Base *= 1 + float64(mLength) / 40
 		}
 		matrix.Matrix[oY][oX].Tenure = oLength - 1
 
@@ -393,10 +423,10 @@ func step(data Req) string {
 	}
 
 	// limit depth by snake length
-	var localDepth int = 14
+	var localDepth int = 13
 	if mLength < 50 {
-		if localDepth > mLength + 2 {
-			localDepth = mLength + 2
+		if localDepth > mLength + 5 {
+			localDepth = mLength + 5
 		}
 	} else {
 		localDepth += (mLength - 30) / 18
